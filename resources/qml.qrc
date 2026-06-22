@@ -1,0 +1,14 @@
+<!-- resources/qml.qrc -->
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <qresource prefix="/">
+        <file alias="src/shell/qml/main.qml">../src/shell/qml/main.qml</file>
+        <file alias="src/shell/qml/qmldir">../src/shell/qml/qmldir</file>
+        <file alias="src/shell/qml/Theme.qml">../src/shell/qml/Theme.qml</file>
+        <file alias="src/shell/qml/Constants.qml">../src/shell/qml/Constants.qml</file>
+        <file alias="src/shell/topbar/TopBar.qml">../src/shell/topbar/TopBar.qml</file>
+        <file alias="src/shell/topbar/Clock.qml">../src/shell/topbar/Clock.qml</file>
+        <file alias="src/shell/topbar/StatusArea.qml">../src/shell/topbar/StatusArea.qml</file>
+        <file alias="src/shell/topbar/ApplicationTitle.qml">../src/shell/topbar/ApplicationTitle.qml</file>
+    </qresource>
+</RCC>
