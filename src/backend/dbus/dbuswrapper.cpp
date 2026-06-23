@@ -169,3 +169,175 @@ std::tuple<QString, bool> DBusWrapper::getNetworkStatus()
 
     return {status, connected};
 }
+
+
+// =========================================================
+// MPRIS MEDIA CONTROL METHODS (NEW)
+// =========================================================
+
+void DBusWrapper::setupMprisListener()
+{
+    // Dynamically connect to the PropertiesChanged signal on any service path
+    // implementing the org.mpris.MediaPlayer2.Player interface
+    bool mprisPropertyConnected = QDBusConnection::sessionBus().connect(
+        "", // Connect to any registered service name matching the pattern below
+        "/org/mpris/MediaPlayer2",
+        "org.freedesktop.DBus.Properties",
+        "PropertiesChanged",
+        this,
+        SLOT(onMprisPropertiesChanged(QString, QVariantMap, QStringList))
+    );
+
+    if (!mprisPropertyConnected) {
+        qWarning() << "Failed to register MPRIS global PropertiesChanged listener";
+    }
+}
+
+void DBusWrapper::onMprisPropertiesChanged(const QString &interfaceName, const QVariantMap &changedProperties, const QStringList &invalidatedProperties)
+{
+    Q_UNUSED(changedProperties);
+    Q_UNUSED(invalidatedProperties);
+    
+    // Notify the backend engine to recalculate state whenever metadata/playback state shifts
+    if (interfaceName == "org.mpris.MediaPlayer2.Player") {
+        emit mediaPropertiesChanged();
+    }
+}
+
+QString DBusWrapper::findActiveMediaPlayer()
+{
+    if (!QDBusConnection::sessionBus().isConnected()) {
+        return QString();
+    }
+
+    QDBusReply<QStringList> services = QDBusConnection::sessionBus().interface()->registeredServiceNames();
+    if (!services.isValid()) {
+        return QString();
+    }
+
+    // Step 1: Scan for players that are actively playing music (highest priority)
+    for (const QString &service : services.value()) {
+        if (service.startsWith("org.mpris.MediaPlayer2.")) {
+            if (getMediaPlaybackStatus(service)) {
+                m_currentTrackedPlayer = service;
+                return service;
+            }
+        }
+    }
+
+    // Step 2: Fall back to any registered MPRIS player currently open (e.g., paused)
+    for (const QString &service : services.value()) {
+        if (service.startsWith("org.mpris.MediaPlayer2.")) {
+            m_currentTrackedPlayer = service;
+            return service;
+        }
+    }
+
+    m_currentTrackedPlayer.clear();
+    return QString();
+}
+
+bool DBusWrapper::getMediaPlaybackStatus(const QString &serviceName)
+{
+    if (serviceName.isEmpty()) {
+        return false;
+    }
+
+    QDBusInterface player(
+        serviceName,
+        "/org/mpris/MediaPlayer2",
+        "org.freedesktop.DBus.Properties",
+        QDBusConnection::sessionBus()
+    );
+
+    if (player.isValid()) {
+        QDBusReply<QDBusVariant> reply = player.call("Get", "org.mpris.MediaPlayer2.Player", "PlaybackStatus");
+        if (reply.isValid()) {
+            QString status = reply.value().variant().toString();
+            return (status == "Playing");
+        }
+    }
+    return false;
+}
+
+QString DBusWrapper::getMediaTitle(const QString &serviceName)
+{
+    if (serviceName.isEmpty()) {
+        return QString();
+    }
+
+    QDBusInterface player(
+        serviceName,
+        "/org/mpris/MediaPlayer2",
+        "org.freedesktop.DBus.Properties",
+        QDBusConnection::sessionBus()
+    );
+
+    if (player.isValid()) {
+        QDBusReply<QDBusVariant> reply = player.call("Get", "org.mpris.MediaPlayer2.Player", "Metadata");
+        if (reply.isValid()) {
+            QVariantMap metadata = qvariant_cast<QVariantMap>(reply.value().variant());
+            // Standard MPRIS metadata key for the song title is "xesam:title"
+            return metadata.value("xesam:title").toString();
+        }
+    }
+    return QString();
+}
+
+double DBusWrapper::getMediaProgress(const QString &serviceName)
+{
+    if (serviceName.isEmpty()) {
+        return 0.0;
+    }
+
+    QDBusInterface player(
+        serviceName,
+        "/org/mpris/MediaPlayer2",
+        "org.freedesktop.DBus.Properties",
+        QDBusConnection::sessionBus()
+    );
+
+    if (player.isValid()) {
+        // Step 1: Read total length (lives inside the Metadata map, stored in microseconds)
+        QDBusReply<QDBusVariant> metadataReply = player.call("Get", "org.mpris.MediaPlayer2.Player", "Metadata");
+        double totalLength = 0.0;
+        if (metadataReply.isValid()) {
+            QVariantMap metadata = qvariant_cast<QVariantMap>(metadataReply.value().variant());
+            totalLength = metadata.value("mpris:length").toDouble();
+        }
+
+        if (totalLength <= 0.0) {
+            return 0.0;
+        }
+
+        // Step 2: Read current playback position (stored in microseconds)
+        QDBusReply<QDBusVariant> positionReply = player.call("Get", "org.mpris.MediaPlayer2.Player", "Position");
+        double position = 0.0;
+        if (positionReply.isValid()) {
+            position = positionReply.value().variant().toDouble();
+        }
+
+        // Return progress normalized between 0.0 and 1.0
+        return qBound(0.0, position / totalLength, 1.0);
+    }
+    return 0.0;
+}
+
+void DBusWrapper::triggerMediaAction(const QString &serviceName, const QString &action)
+{
+    if (serviceName.isEmpty()) {
+        return;
+    }
+
+    // Call MPRIS methods directly (e.g. PlayPause, Next, Previous) on the Player interface
+    QDBusInterface player(
+        serviceName,
+        "/org/mpris/MediaPlayer2",
+        "org.mpris.MediaPlayer2.Player",
+        QDBusConnection::sessionBus()
+    );
+
+    if (player.isValid()) {
+        player.call(action);
+    }
+}

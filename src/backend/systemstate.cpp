@@ -157,3 +157,66 @@ void SystemState::updateNetwork()
         emit networkChanged();
     }
 }
+
+// MEDIA PLAYER CONTROLS (MPRIS INTERFACE ACTIONS)
+// =========================================================
+void SystemState::updateMediaState()
+{
+    QString activePlayer = m_dbus->findActiveMediaPlayer();
+    bool active = !activePlayer.isEmpty();
+
+    if (active != m_isMediaActive) {
+        m_isMediaActive = active;
+        emit mediaActiveChanged();
+    }
+
+    m_activePlayerService = activePlayer;
+
+    if (active) {
+        bool playing = m_dbus->getMediaPlaybackStatus(activePlayer);
+        QString title = m_dbus->getMediaTitle(activePlayer);
+        double progress = m_dbus->getMediaProgress(activePlayer);
+
+        // =========================================================
+if (playing != m_isMediaPlaying) {
+            m_isMediaPlaying = playing;
+            emit mediaPlayingChanged();
+        }
+        if (title != m_mediaTitle) {
+            m_mediaTitle = title;
+            emit mediaTitleChanged();
+        }
+        if (qAbs(progress - m_mediaProgress) > 0.001) {
+            m_mediaProgress = progress;
+            emit mediaProgressChanged();
+        }
+    } else {
+        if (m_isMediaPlaying) {
+            m_isMediaPlaying = false;
+            emit mediaPlayingChanged();
+        }
+        if (!m_mediaTitle.isEmpty()) {
+            m_mediaTitle.clear();
+            emit mediaTitleChanged();
+        }
+        if (m_mediaProgress != 0.0) {
+            m_mediaProgress = 0.0;
+            emit mediaProgressChanged();
+        }
+    }
+}
+
+void SystemState::mediaPrevious()
+{
+    m_dbus->triggerMediaAction(m_activePlayerService, "Previous");
+}
+
+void SystemState::toggleMediaPlayPause()
+{
+    m_dbus->triggerMediaAction(m_activePlayerService, "PlayPause");
+}
+
+void SystemState::mediaNext()
+{
+    m_dbus->triggerMediaAction(m_activePlayerService, "Next");
+}

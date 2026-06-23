@@ -140,6 +140,7 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
+import Fluent
 
 Rectangle {
     id: topBar
@@ -157,7 +158,6 @@ Rectangle {
     readonly property string networkStatus: SystemState.networkStatus
     readonly property bool isNetworkConnected: SystemState.isNetworkConnected
 
-
     // Global transitions for any child elements shifting layout allocation
     RowLayout {
         anchors.fill: parent
@@ -172,7 +172,10 @@ Rectangle {
             spacing: 18
         }
         MediaBar{
-            
+            title: SystemState.mediaTitle
+            isPlaying: SystemState.isMediaPlaying
+            progress: SystemState.mediaProgress
+            hasMedia: SystemState.isMediaActive
         }
         // ================= CENTER ZONE: Clock & Media =================
         RowLayout {
