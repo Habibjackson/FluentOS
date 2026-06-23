@@ -1,12 +1,13 @@
 import QtQuick
 import QtQuick.Window
+import Fluent
 
 Window {
     width: 1920
     height: 1080
     visible: true
-    color: Theme.colors.background
-    title: SystemState.activeAppTitle.length ? SystemState.activeAppTitle : "Fluent Shell"
+    color: Theme.colors.surfaceSoft
+    title: SystemState.activeAppTitle ? SystemState.activeAppTitle : "Fluent Shell"
 
     TopBar {
         anchors.top: parent.top

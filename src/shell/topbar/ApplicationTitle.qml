@@ -11,7 +11,7 @@ Item {
 
     RowLayout {
         id: titleRow
-        anchors.centerIn: parent
+        anchors.left: parent.left
         spacing: Theme.spacing.xs
 
         Rectangle {
@@ -29,7 +29,7 @@ Item {
             font.pixelSize: Theme.fontSize.sm + 1
             font.weight: Font.DemiBold
             color: Theme.colors.text
-            elide: Text.ElideRight
+            elide: Text.ElideLeft
             Layout.alignment: Qt.AlignVCenter
         }
     }

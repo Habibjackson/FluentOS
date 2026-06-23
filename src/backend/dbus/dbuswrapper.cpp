@@ -13,9 +13,54 @@ DBusWrapper::DBusWrapper()
     if (!m_systemBusAvailable) {
         qWarning() << "D-Bus system bus not available, using fallback values";
     }
+
+    // New: Hook into the Session Bus to listen for live OS theme updates
+    if (QDBusConnection::sessionBus().isConnected()) {
+        QDBusConnection::sessionBus().connect(
+            "org.freedesktop.portal.Desktop",
+            "/org/freedesktop/portal/desktop",
+            "org.freedesktop.portal.Settings",
+            "SettingChanged",
+            this,
+            SLOT(onPortalSettingChanged(QString, QString, QDBusVariant))
+        );
+    }
 }
 
 DBusWrapper::~DBusWrapper() = default;
+
+bool DBusWrapper::getSystemColorScheme()
+{
+    if (!QDBusConnection::sessionBus().isConnected()) {
+        return true; // Default fallback to dark mode
+    }
+
+    QDBusMessage message = QDBusMessage::createMethodCall(
+        "org.freedesktop.portal.Desktop",
+        "/org/freedesktop/portal/desktop",
+        "org.freedesktop.portal.Settings",
+        "Read"
+    );
+    message << "org.freedesktop.appearance" << "color-scheme";
+
+    QDBusMessage reply = QDBusConnection::sessionBus().call(message);
+    if (reply.type() == QDBusMessage::ReplyMessage && !reply.arguments().isEmpty()) {
+        QVariant variant = reply.arguments().first();
+        QDBusVariant dbusVariant = qvariant_cast<QDBusVariant>(variant);
+        uint colorScheme = dbusVariant.variant().toUInt();
+        return (colorScheme == 1); // 1 = Prefer Dark, 2 = Prefer Light
+    }
+
+    return true;
+}
+
+void DBusWrapper::onPortalSettingChanged(const QString &namespaceName, const QString &key, const QDBusVariant &value)
+{
+    if (namespaceName == "org.freedesktop.appearance" && key == "color-scheme") {
+        uint colorScheme = value.variant().toUInt();
+        emit systemColorSchemeChanged(colorScheme == 1);
+    }
+}
 
 std::tuple<double, bool> DBusWrapper::getBatteryStatus()
 {

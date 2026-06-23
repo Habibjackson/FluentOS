@@ -25,6 +25,8 @@ qt_add_qml_module(fluent
         shell/topbar/Clock.qml
         shell/topbar/NotificationCenter.qml
         shell/topbar/StatusArea.qml
+        shell/topbar/BatteryIndicator.qml
+        shell/topbar/MediaBar.qml
     SOURCES
         backend/systemstate.h
         backend/systemstate.cpp
