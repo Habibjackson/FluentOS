@@ -33,7 +33,6 @@ Item {
 
         Text {
             text: clock.currentTime
-            font.family: Theme.fonts.defaultFont.family
             font.pixelSize: Theme.fontSize.sm
             font.weight: Font.DemiBold
             color: timeColor

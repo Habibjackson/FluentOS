@@ -27,11 +27,19 @@ qt_add_qml_module(fluent
         shell/topbar/StatusArea.qml
         shell/topbar/BatteryIndicator.qml
         shell/topbar/MediaBar.qml
+        shell/qml/IconButton.qml
+        shell/qml/Icon.qml
+
     SOURCES
         backend/systemstate.h
         backend/systemstate.cpp
         backend/dbus/dbuswrapper.h
         backend/dbus/dbuswrapper.cpp
+    RESOURCES
+        assets/icons/pause.svg 
+        assets/icons/play.svg 
+        assets/icons/skipnext.svg 
+        assets/icons/skipprevious.svg    
 )
 
 target_link_libraries(fluent PRIVATE
@@ -45,6 +53,7 @@ target_link_libraries(fluent PRIVATE
 target_include_directories(fluent PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/backend
+    ${CMAKE_CURRENT_SOURCE_DIR}/assets
 )
 
 install(TARGETS fluent DESTINATION bin)

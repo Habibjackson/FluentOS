@@ -12,6 +12,10 @@ QtObject {
     // Binds directly to the integrated SystemState settings engine
     readonly property bool isDark: SystemState.isDark
 
+    Component.onCompleted: {
+        console.log("theme", isDark)
+    }
+
     // ==========================================
     // DYNAMIC COLORS
     // ==========================================

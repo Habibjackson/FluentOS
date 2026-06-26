@@ -1,13 +1,12 @@
-// src/backend/dbus/dbuswrapper.h
-
-#pragma once
 #ifndef DBUSWRAPPER_H
 #define DBUSWRAPPER_H
 
 #include <QObject>
 #include <QString>
+#include <tuple> // C++ Standard Library tuple replaces the non-existent QTuple
 #include <QDBusVariant>
-#include <QDBusConnectionInterface>
+#include <QVariantMap>
+#include <QTimer>
 
 class DBusWrapper : public QObject
 {
@@ -17,10 +16,11 @@ public:
     DBusWrapper();
     ~DBusWrapper();
 
+    // Hardware Status Methods
     std::tuple<double, bool> getBatteryStatus();
     std::tuple<QString, bool> getNetworkStatus();
     
-    // Read initial portal color-scheme setting
+    // Portal / Theme Methods
     bool getSystemColorScheme();
 
     // MPRIS Media Control Methods
@@ -29,25 +29,36 @@ public:
     QString getMediaTitle(const QString &serviceName);
     double getMediaProgress(const QString &serviceName); // Returns 0.0 to 1.0
 
-    // Media Action Signals
+    // Media Action Trigger
     void triggerMediaAction(const QString &serviceName, const QString &action);
 
-signals:
-    // Emitted when the Linux system theme changes live via D-Bus
-    void systemColorSchemeChanged(bool isDark);
+    // Diagnostics Debug Dump
+    void debugDumpMprisPlayers();
 
+signals:
+    void systemColorSchemeChanged(bool isDark);
+    
+    // Signals for active media state changes
     void mediaPropertiesChanged();
 
 private slots:
-    // Internal D-Bus callback listener
     void onPortalSettingChanged(const QString &namespaceName, const QString &key, const QDBusVariant &value);
+    
+    // Slot registrations matching updated source file
     void onMprisPropertiesChanged(const QString &interfaceName, const QVariantMap &changedProperties, const QStringList &invalidatedProperties);
+    void onMprisSeeked(qlonglong position);
+    void onDBusNameOwnerChanged(const QString &name, const QString &oldOwner, const QString &newOwner);
 
 private:
     void setupMprisListener();
+    void refreshMediaProgressTimer();
 
     bool m_systemBusAvailable = false;
     QString m_currentTrackedPlayer;
+    
+    // Structural state members
+    bool m_mprisListenerSetup = false;
+    QTimer *m_mediaProgressTimer = nullptr;
 };
 
 #endif // DBUSWRAPPER_H

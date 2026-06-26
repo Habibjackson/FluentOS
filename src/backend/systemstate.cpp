@@ -1,10 +1,12 @@
-// src/backend/systemstate.cpp
 #include "systemstate.h"
 #include "dbus/dbuswrapper.h"
 #include <QGuiApplication>
 #include <QStandardPaths>
 #include <QDebug>
 #include <QWindow>
+#include <QDir>
+#include <QTimer>
+#include <cmath>
 
 SystemState::SystemState(QObject *parent)
     : QObject(parent)
@@ -15,6 +17,15 @@ SystemState::SystemState(QObject *parent)
     // 1. Setup Persistent Storage (~/.config/FluentShell/config.ini)
     QString configPath = QStandardPaths::writableLocation(QStandardPaths::ConfigLocation) + "/FluentShell/config.ini";
     m_settings = new QSettings(configPath, QSettings::IniFormat, this);
+
+    qDebug() << "DEBUG: Looking for config at:" << configPath;
+    // If the file doesn't exist yet, write the defaults immediately
+    if (!QFile::exists(configPath)) {
+        m_settings->setValue("Appearance/UseSystemTheme", true);
+        m_settings->setValue("Appearance/DarkOverride", true);
+        m_settings->setValue("Appearance/CustomAccent", QColor("#0A84FF"));
+        m_settings->sync(); // Force write to disk
+    }
 
     m_useSystemTheme = m_settings->value("Appearance/UseSystemTheme", true).toBool();
     m_darkOverride = m_settings->value("Appearance/DarkOverride", true).toBool();
@@ -31,7 +42,10 @@ SystemState::SystemState(QObject *parent)
         }
     });
 
-    // 4. Existing Timer and Signal mappings
+    // 4. CRITICAL FIX: Connect MPRIS property updates to trigger instant media state changes
+    connect(m_dbus.get(), &DBusWrapper::mediaPropertiesChanged, this, &SystemState::updateMediaState);
+
+    // 5. Existing Timer and Signal mappings
     connect(m_updateTimer, &QTimer::timeout, this, &SystemState::updateTime);
     m_updateTimer->start(1000);
 
@@ -39,9 +53,11 @@ SystemState::SystemState(QObject *parent)
         updateActiveAppTitle();
     });
 
+    // 6. CRITICAL FIX: Update media state periodically alongside hardware sweeps
     connect(m_pollTimer, &QTimer::timeout, this, [this]() {
         updateBattery();
         updateNetwork();
+        updateMediaState(); // Sweeps for newly launched media players every 5 seconds
     });
     m_pollTimer->start(5000);
 
@@ -51,47 +67,65 @@ SystemState::SystemState(QObject *parent)
     updateBattery();
     updateNetwork();
     updateEffectiveTheme(); // Initial theme setup
+    updateMediaState();     // Initial media scan
 }
 
 SystemState::~SystemState() = default;
 
-void SystemState::updateEffectiveTheme()
-{
-    // Rule implementation: fallback to user configuration file if system mirroring is disabled
-    bool targetDark = m_useSystemTheme ? m_systemIsDark : m_darkOverride;
-    if (m_isDark != targetDark) {
-        m_isDark = targetDark;
+void SystemState::updateEffectiveTheme() {
+    bool newIsDark = m_isDark;
+
+    if (m_useSystemTheme) {
+        newIsDark = m_systemIsDark;
+    } else {
+        newIsDark = m_darkOverride;
+    }
+
+    if (m_isDark != newIsDark) {
+        m_isDark = newIsDark;
         emit isDarkChanged();
     }
 }
 
 void SystemState::setUseSystemTheme(bool value)
 {
-    if (m_useSystemTheme != value) {
-        m_useSystemTheme = value;
-        m_settings->setValue("Appearance/UseSystemTheme", value);
-        emit useSystemThemeChanged();
-        updateEffectiveTheme();
+    if (m_useSystemTheme == value) {
+        return;
     }
+
+    m_useSystemTheme = value;
+    m_settings->setValue(QStringLiteral("Appearance/UseSystemTheme"), value);
+    m_settings->sync();
+
+    emit useSystemThemeChanged();
+    updateEffectiveTheme();
 }
 
 void SystemState::setDarkOverride(bool value)
 {
-    if (m_darkOverride != value) {
-        m_darkOverride = value;
-        m_settings->setValue("Appearance/DarkOverride", value);
-        emit darkOverrideChanged();
-        updateEffectiveTheme();
+    if (m_darkOverride == value) {
+        return;
     }
+
+    m_darkOverride = value;
+    m_settings->setValue(QStringLiteral("Appearance/DarkOverride"), value);
+    m_settings->sync();
+
+    emit darkOverrideChanged();
+    updateEffectiveTheme();
 }
 
 void SystemState::setCustomAccent(const QColor &color)
 {
-    if (m_customAccent != color) {
-        m_customAccent = color;
-        m_settings->setValue("Appearance/CustomAccent", color);
-        emit customAccentChanged();
+    if (m_customAccent == color) {
+        return;
     }
+
+    m_customAccent = color;
+    m_settings->setValue(QStringLiteral("Appearance/CustomAccent"), color);
+    m_settings->sync();
+
+    emit customAccentChanged();
 }
 
 void SystemState::updateTime()
@@ -137,10 +171,12 @@ void SystemState::updateBattery()
 {
     auto [percent, charging] = m_dbus->getBatteryStatus();
 
-    if (percent != m_batteryPercent) {
+    // Avoid tiny floating-point changes causing repeated QML updates.
+    if (std::abs(percent - m_batteryPercent) >= 0.1) {
         m_batteryPercent = percent;
         emit batteryChanged();
     }
+
     if (charging != m_isCharging) {
         m_isCharging = charging;
         emit chargingChanged();
@@ -162,61 +198,84 @@ void SystemState::updateNetwork()
 // =========================================================
 void SystemState::updateMediaState()
 {
-    QString activePlayer = m_dbus->findActiveMediaPlayer();
-    bool active = !activePlayer.isEmpty();
+    m_dbus->debugDumpMprisPlayers();
+    const QString activePlayer = m_dbus->findActiveMediaPlayer();
+    const bool active = !activePlayer.isEmpty();
+
+    if (m_activePlayerService != activePlayer) {
+        m_activePlayerService = activePlayer;
+    }
 
     if (active != m_isMediaActive) {
         m_isMediaActive = active;
         emit mediaActiveChanged();
     }
 
-    m_activePlayerService = activePlayer;
-
-    if (active) {
-        bool playing = m_dbus->getMediaPlaybackStatus(activePlayer);
-        QString title = m_dbus->getMediaTitle(activePlayer);
-        double progress = m_dbus->getMediaProgress(activePlayer);
-
-        // =========================================================
-if (playing != m_isMediaPlaying) {
-            m_isMediaPlaying = playing;
-            emit mediaPlayingChanged();
-        }
-        if (title != m_mediaTitle) {
-            m_mediaTitle = title;
-            emit mediaTitleChanged();
-        }
-        if (qAbs(progress - m_mediaProgress) > 0.001) {
-            m_mediaProgress = progress;
-            emit mediaProgressChanged();
-        }
-    } else {
+    if (!active) {
         if (m_isMediaPlaying) {
             m_isMediaPlaying = false;
             emit mediaPlayingChanged();
         }
+
         if (!m_mediaTitle.isEmpty()) {
             m_mediaTitle.clear();
             emit mediaTitleChanged();
         }
+
         if (m_mediaProgress != 0.0) {
             m_mediaProgress = 0.0;
             emit mediaProgressChanged();
         }
+
+        return;
+    }
+
+    const bool playing = m_dbus->getMediaPlaybackStatus(activePlayer);
+    const QString title = m_dbus->getMediaTitle(activePlayer);
+    const double progress = m_dbus->getMediaProgress(activePlayer);
+
+    if (playing != m_isMediaPlaying) {
+        m_isMediaPlaying = playing;
+        emit mediaPlayingChanged();
+    }
+
+    if (title != m_mediaTitle) {
+        m_mediaTitle = title;
+        emit mediaTitleChanged();
+    }
+
+    if (std::abs(progress - m_mediaProgress) > 0.001) {
+        m_mediaProgress = progress;
+        emit mediaProgressChanged();
     }
 }
 
 void SystemState::mediaPrevious()
 {
-    m_dbus->triggerMediaAction(m_activePlayerService, "Previous");
+    if (m_activePlayerService.isEmpty()) {
+        updateMediaState();
+    }
+
+    m_dbus->triggerMediaAction(m_activePlayerService, QStringLiteral("Previous"));
+    QTimer::singleShot(150, this, &SystemState::updateMediaState);
 }
 
 void SystemState::toggleMediaPlayPause()
 {
-    m_dbus->triggerMediaAction(m_activePlayerService, "PlayPause");
+    if (m_activePlayerService.isEmpty()) {
+        updateMediaState();
+    }
+
+    m_dbus->triggerMediaAction(m_activePlayerService, QStringLiteral("PlayPause"));
+    QTimer::singleShot(150, this, &SystemState::updateMediaState);
 }
 
 void SystemState::mediaNext()
 {
-    m_dbus->triggerMediaAction(m_activePlayerService, "Next");
+    if (m_activePlayerService.isEmpty()) {
+        updateMediaState();
+    }
+
+    m_dbus->triggerMediaAction(m_activePlayerService, QStringLiteral("Next"));
+    QTimer::singleShot(150, this, &SystemState::updateMediaState);
 }

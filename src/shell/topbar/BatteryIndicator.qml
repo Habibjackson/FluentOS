@@ -194,15 +194,15 @@ RowLayout {
             readonly property color contentColor: {
                 if (batteryRoot.level > 55) {
                     // Extract RGB channels from the current Theme background color and apply 60% opacity
-                    return Qt.rgba(Theme.colors.background.r, 
-                                   Theme.colors.background.g, 
-                                   Theme.colors.background.b, 
+                    return Qt.rgba(Theme.colors.background.r,
+                                   Theme.colors.background.g,
+                                   Theme.colors.background.b,
                                    0.6);
                 }
                 // Extract RGB channels from the current Theme text color and apply 80% opacity
-                return Qt.rgba(Theme.colors.text.r, 
-                               Theme.colors.text.g, 
-                               Theme.colors.text.b, 
+                return Qt.rgba(Theme.colors.text.r,
+                               Theme.colors.text.g,
+                               Theme.colors.text.b,
                                0.8);
             }
 

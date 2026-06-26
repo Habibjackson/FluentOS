@@ -54,7 +54,7 @@
 //         RowLayout {
 //             Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
 //             spacing: Theme.spacing.sm
-        
+
 //             Clock {
 //                 Layout.alignment: Qt.AlignVCenter
 //                 currentTime: topBar.currentTime
@@ -148,6 +148,17 @@ Rectangle {
     height: Constants.topBarHeight
     color: Theme.colors.background // Inherits global transparent/blur dark theme
 
+    // Gradient-based background to mimic deep glass/blur
+    gradient: Gradient {
+        GradientStop {
+            position: 0.0
+            color: Qt.rgba(Theme.colors.background.r, Theme.colors.background.g, Theme.colors.background.b, Theme.alpha.panelBackground + 0.1)
+        }
+        GradientStop {
+            position: 1.0
+            color: Qt.rgba(Theme.colors.background.r, Theme.colors.background.g, Theme.colors.background.b, Theme.alpha.panelBackground - 0.05)
+        }
+    }
     property bool notificationCenterOpen: false
 
     readonly property string activeAppTitle: SystemState.activeAppTitle
@@ -161,17 +172,17 @@ Rectangle {
     // Global transitions for any child elements shifting layout allocation
     RowLayout {
         anchors.fill: parent
-        anchors.leftMargin: 16
-        anchors.rightMargin: 16
+        anchors.leftMargin: 12
+        anchors.rightMargin: 12
         spacing: 0
 
         // ================= LEFT ZONE: Workspaces =================
         RowLayout {
             id: leftZone
             Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter
-            spacing: 18
+            // spacing: 18
         }
-        MediaBar{
+        MediaBar {
             title: SystemState.mediaTitle
             isPlaying: SystemState.isMediaPlaying
             progress: SystemState.mediaProgress
@@ -184,9 +195,13 @@ Rectangle {
             Layout.fillWidth: true
 
             // Keeps center items genuinely centered
-            Item { Layout.fillWidth: true }
+            Item {
+                Layout.fillWidth: true
+            }
 
-            Item { Layout.fillWidth: true }
+            Item {
+                Layout.fillWidth: true
+            }
         }
 
         // ================= RIGHT ZONE: Dynamic Tray & Monitors =================
@@ -195,7 +210,7 @@ Rectangle {
             Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
             spacing: Theme.spacing.sm
 
-            Clock{
+            Clock {
                 Layout.alignment: Qt.AlignVCenter
                 currentTime: topBar.currentTime
                 currentDate: topBar.currentDate
